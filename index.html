@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2563eb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="施工看板">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>每日施工工項看板</title>
+<style>
+/* VOICE: 工地現場的作業許可看板，清楚、密、可快速掃讀
+   IDEA: 每日施工許可單貼在柱位平面圖上
+   PICTURE: 柱位平面圖 + 各工項的施工範圍色塊
+   COLOUR and TYPE: 白底、深藍墨線，作業類別各一色；系統字體
+   LAYOUT: 上方匯入與篩選，左圖右清單，手機上下堆疊 */
+:root{--bg:#f1f5f9;--panel:#fff;--panel2:#f8fafc;--line:#e2e8f0;--line2:#cbd5e1;--tx:#0f172a;--tx2:#475569;--tx3:#64748b;--acc:#2563eb;--accbg:#dbeafe;
+  --planbg:#fff;--imgf:brightness(.3) saturate(2.4);--imgop:.8;--bubbg:#fff;--bubbd:#0369a1;--bubtx:#0c4a6e;--grid:#0369a1;--gridop:.3;--sel:#c026d3}
+html:not(.light){--bg:#0b1220;--panel:#111a2e;--panel2:#0f172a;--line:#1e293b;--line2:#334155;--tx:#e2e8f0;--tx2:#94a3b8;--tx3:#64748b;--acc:#3b82f6;--accbg:#1e3a8a;
+  --planbg:#070d1a;--imgf:none;--imgop:.9;--bubbg:#0b1830;--bubbd:#38bdf899;--bubtx:#bae6fd;--grid:#38bdf8;--gridop:.3;--sel:#e879f9}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;overflow-x:clip}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.wrap{max-width:1400px;margin:0 auto;padding:12px 14px 40px}
+header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:4px 0 12px}
+header h1{font-size:20px;margin:0;line-height:1.2}
+header p{margin:2px 0 0;font-size:13px;color:var(--tx2)}
+.hbtns{margin-left:auto;display:flex;gap:8px}
+.btn{height:42px;padding:0 14px;border-radius:11px;background:var(--panel);border:1px solid var(--line2);font-weight:700;font-size:14px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn:focus-visible,.chip:focus-visible,.fl:focus-visible{outline:3px solid #60a5fa;outline-offset:2px}
+/* 匯入 */
+.drop{border:2px dashed var(--line2);border-radius:18px;background:var(--panel);padding:38px 20px;text-align:center;margin-top:6px}
+.drop.over{border-color:var(--acc);background:var(--accbg)}
+.drop h2{margin:0 0 6px;font-size:20px}
+.drop p{margin:4px 0;color:var(--tx2);font-size:14px}
+.drop code{font-size:12.5px;background:var(--panel2);border:1px solid var(--line);padding:2px 6px;border-radius:6px;overflow-wrap:anywhere}
+.drop .btn{margin-top:14px;height:48px;font-size:16px}
+/* 篩選列 */
+.bar{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.lab{font-size:12px;color:var(--tx3);font-weight:700;min-width:44px}
+select.sel,input.inp{height:40px;border-radius:10px;border:1px solid var(--line2);background:var(--panel2);padding:0 10px;font-size:16px}
+input.inp{flex:1;min-width:160px}
+.scroll{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px}
+.scroll::-webkit-scrollbar{display:none}
+.chip{flex:none;height:34px;padding:0 11px;border-radius:999px;border:1px solid var(--line2);background:var(--panel2);font-size:13px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:var(--tx2)}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.chip i{width:10px;height:10px;border-radius:3px;flex:none}
+.chip.cat.on{background:var(--panel);color:var(--tx);border-width:2px}
+.chip small{opacity:.75;font-size:11.5px}
+/* 數字 */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.stat b{display:block;font-size:clamp(20px,4vw,28px);line-height:1.1}
+.stat span{font-size:12px;color:var(--tx2)}
+.stat.warn b{color:#dc2626}
+/* 棟 × 樓 矩陣 */
+.matrix{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:12px}
+.mrow{display:flex;align-items:center;gap:8px;padding:5px 0}
+.mrow+.mrow{border-top:1px dashed var(--line)}
+.mrow .bn{width:56px;flex:none;font-weight:800;font-size:14px}
+.fl{flex:none;min-width:58px;height:44px;border-radius:10px;border:1px solid var(--line2);background:var(--panel2);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;padding:0 8px}
+.fl b{font-size:13px}.fl span{font-size:11px;color:var(--tx3)}
+.fl.has{border-color:#93c5fd}
+.fl.on{background:var(--acc);border-color:var(--acc);color:#fff}.fl.on span{color:#dbeafe}
+.fl.nomap{border-style:dashed}
+/* 主區 */
+.main{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px;align-items:start}
+@media(max-width:900px){.main{grid-template-columns:minmax(0,1fr)}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px}
+.card h3{margin:0;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h3 small{font-weight:500;color:var(--tx2);font-size:12.5px}
+.ptools{display:flex;align-items:center;gap:6px;margin:8px 0;flex-wrap:wrap}
+.zb{width:38px;height:38px;border-radius:10px;background:var(--panel2);border:1px solid var(--line2);font-size:18px;font-weight:700}
+.tog{height:34px;padding:0 10px;border-radius:999px;border:1px solid var(--line2);font-size:12.5px;color:var(--tx2);background:var(--panel2)}
+.tog.on{background:var(--accbg);border-color:var(--acc);color:var(--tx)}
+.plan-scroll{position:relative;max-height:74vh;overflow:auto;border-radius:12px;border:1px solid var(--line2);background:var(--planbg);-webkit-overflow-scrolling:touch}
+.plan-cq{container-type:inline-size;position:relative}
+.plan-pad{position:relative;padding:4.6cqw 0 0 4.6cqw}
+.ax-t{position:absolute;left:4.6cqw;right:0;top:0;height:4.6cqw}
+.ax-l{position:absolute;top:4.6cqw;left:0;bottom:0;width:4.6cqw}
+.ax{position:absolute;transform:translate(-50%,-50%);border:1px solid var(--bubbd);border-radius:999px;text-align:center;color:var(--bubtx);background:var(--bubbg);font-weight:700;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;letter-spacing:-.02em}
+.area{position:relative;cursor:crosshair}
+.area img{position:absolute;inset:0;width:100%;height:100%;filter:var(--imgf);opacity:var(--imgop);pointer-events:none;user-select:none}
+.area svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.area svg .gl{stroke:var(--grid);stroke-opacity:var(--gridop)}
+.zone{position:absolute;border:1.5px solid;border-radius:2px;pointer-events:none}
+.zone.full{border-style:dashed;background:none !important}
+.zone.hit{outline:3px solid var(--sel);outline-offset:1px;z-index:5}
+.zone.dim{opacity:.18}
+.mark{position:absolute;transform:translate(-50%,-50%);width:4cqw;height:4cqw;border-radius:50%;border:2.5px solid var(--sel);background:#c026d333;pointer-events:none;z-index:6}
+.nomap-box{padding:30px 12px;text-align:center;color:var(--tx2);font-size:14px;border:1px dashed var(--line2);border-radius:12px}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--tx2);margin-top:8px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:12px;height:12px;border-radius:3px;border:1.5px solid}
+.pickinfo{margin-top:8px;font-size:13.5px;padding:9px 11px;border-radius:10px;background:var(--panel2);border:1px solid var(--line)}
+/* 清單 */
+.lhead{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-bottom:8px}
+.sort{height:36px}
+.item{border:1px solid var(--line);border-left:5px solid var(--c);border-radius:12px;padding:10px 12px;background:var(--panel)}
+.item+.item{margin-top:8px}
+.item.hl{box-shadow:0 0 0 3px var(--sel)}
+.it1{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px}
+.tag{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.t-cat{color:#fff}
+.t-l2{background:#fee2e2;color:#b91c1c}.t-l1{background:var(--panel2);color:var(--tx2);border:1px solid var(--line)}
+.t-ok{background:#dcfce7;color:#15803d}.t-wait{background:#e0f2fe;color:#0369a1}.t-cxl{background:#f1f5f9;color:#64748b;text-decoration:line-through}
+.t-ov{background:#fef3c7;color:#b45309}
+html:not(.light) .t-l2{background:#7f1d1d;color:#fecaca}html:not(.light) .t-ok{background:#14532d;color:#bbf7d0}html:not(.light) .t-wait{background:#0c4a6e;color:#bae6fd}html:not(.light) .t-ov{background:#78350f;color:#fde68a}html:not(.light) .t-cxl{background:#1e293b}
+.it1 .no{margin-left:auto;color:var(--tx3)}
+.ittl{font-size:15.5px;font-weight:700;margin:6px 0 2px;overflow-wrap:anywhere}
+.locs{display:flex;flex-direction:column;gap:3px;margin:6px 0}
+.loc{font-size:13.5px;display:flex;gap:6px;align-items:baseline}
+.loc button{color:var(--acc);font-weight:700;text-align:left;padding:0}
+.loc .na{color:var(--tx3)}
+.desc{font-size:13.5px;color:var(--tx2);white-space:pre-wrap;overflow-wrap:anywhere;max-height:4.6em;overflow:hidden}
+.desc.open{max-height:none}
+.more{font-size:12.5px;color:var(--acc);font-weight:700;margin-top:2px}
+.ppl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px;font-size:13px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.ppl div{overflow-wrap:anywhere}.ppl em{font-style:normal;color:var(--tx3);margin-right:4px}
+.ppl a{color:var(--acc);text-decoration:none;white-space:nowrap}
+@media(max-width:420px){.ppl{grid-template-columns:minmax(0,1fr)}}
+.empty{padding:26px 10px;text-align:center;color:var(--tx3);font-size:14px}
+.note{font-size:12px;color:var(--tx3);margin-top:16px;line-height:1.6}
+.hidden{display:none !important}
+@media(prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>每日施工工項看板</h1>
+      <p id="sub">匯入施工許可 CSV，依日期查看每天的施工工項與柱位範圍</p>
+    </div>
+    <div class="hbtns">
+      <button class="btn" id="themeBtn" type="button"></button>
+      <button class="btn hidden" id="clrBtn" type="button" title="刪除這台電腦上保存的匯入資料">清除快取</button>
+      <button class="btn pri hidden" id="reBtn" type="button">匯入 CSV</button>
+    </div>
+  </header>
+  <input type="file" id="file" accept=".csv,text/csv" class="hidden">
+
+  <section id="dropZone" class="drop">
+    <h2>匯入施工許可 CSV</h2>
+    <p>拖曳檔案到這裡，或點下方按鈕選擇檔案</p>
+    <p>欄位需含：<code>廠別、作業類別、主承商、次承商、單號、施工開始日期、施工結束日期、施工區域、風險判定、施工內容、施工狀態…</code></p>
+    <p>施工區域格式：<code>FAB棟L30樓A柱到Z柱;1柱到14柱.</code>（多個區域可分行）</p>
+    <button class="btn pri" id="pickBtn" type="button">選擇 CSV 檔</button>
+    <p id="loadMsg" style="margin-top:10px"></p>
+    <p style="font-size:12.5px;color:var(--tx3)">匯入的資料只存在這台裝置，保留 24 小時後自動清除；期間重新開啟不必再匯入，匯入新檔會直接取代。</p>
+  </section>
+
+  <section id="app" class="hidden">
+    <div class="bar">
+      <div class="row">
+        <span class="lab">廠別</span><select class="sel" id="site" aria-label="廠別（主承商括號代碼）"></select>
+        <span class="lab">日期</span><input type="date" class="sel" id="dateIn">
+        <input class="inp" id="q" type="search" placeholder="搜尋 承商 / 單號 / 施工內容 / 工安 / 監工">
+      </div>
+      <div class="row"><span class="lab">快選</span><div class="scroll" id="days"></div></div>
+      <div class="row"><span class="lab">作業</span><div class="scroll" id="cats"></div></div>
+      <div class="row"><span class="lab">條件</span><div class="scroll" id="opts"></div></div>
+    </div>
+
+    <div class="stats" id="stats"></div>
+    <div class="matrix" id="matrix"></div>
+
+    <div class="main">
+      <div class="card" id="planCard"></div>
+      <div class="card" id="listCard"></div>
+    </div>
+    <p class="note">日期篩選：施工期間（開始～結束日期）涵蓋所選日期的許可都會列出。平面圖目前支援 F22P4 的 FAB（LB2～RF）與 CUP（LB1～RF），RF 對應 CUP 屋頂層一；其他棟別或「外圍、管橋」等無柱位的區域只列在清單。虛線框為整層或大範圍作業（超過 3 成樓板）；「吊掛重疊」指同一天、同一樓層，吊掛作業範圍與其他工項範圍重疊（同一廠別內跨 F22P4／F22P5 等主承商代碼一併判斷），可用「隱藏整層範圍」關閉。</p>
+  </section>
+</div>
+
+<script>
+{
+/* ════════ 柱線 (沿用巡檢系統 V6) ════════ */
+const COL_MM = { G: 0, F: 960, E: 1920, D: 2880, C: 3960, B: 5040, A: 6000, A1: 6360 };
+const FAB_L = 'ABCDEFGHJKLMNPQRSTUVWXYZ'.split('');
+const NUMS = n => Array.from({ length: n }, (_, i) => String(i + 1));
+const evenLines = (names, a, b, size) => names.map((n, i) => ({ n, f: (a + (b - a) * i / (names.length - 1)) / size }));
+function cupGrid(w, h, xG, xEnd, endName, y1, y12, lastRow) {
+  const names = Object.keys(COL_MM).slice(0, Object.keys(COL_MM).indexOf(endName) + 1);
+  const sx = (xEnd - xG) / COL_MM[endName], sy = (y12 - y1) / 10560;
+  return { w, h, letterAxis: 'x', xs: names.map(n => ({ n, f: (xG + COL_MM[n] * sx) / w })),
+    ys: NUMS(lastRow).map((n, i) => ({ n, f: (y1 + (i < 12 ? i * 960 : 10560 + 360) * sy) / h })) };
+}
+const fabGrid = () => ({ w: 1300, h: 1300, letterAxis: 'y', xs: evenLines(NUMS(26), 22, 1279, 1300), ys: evenLines(FAB_L, 26, 1274, 1300) });
+const PLANS = {
+  'FAB-LB2': fabGrid(), 'FAB-LB1': fabGrid(), 'FAB-L10': fabGrid(), 'FAB-L20': fabGrid(), 'FAB-L30': fabGrid(), 'FAB-L40': fabGrid(), 'FAB-RF': fabGrid(),
+  'CUP-LB1': cupGrid(1137, 1440, 162, 795, 'A', 160, 1278, 13),
+  'CUP-L10': cupGrid(1158, 1414, 345, 1048, 'A1', 167, 1333, 12),
+  'CUP-L20': cupGrid(1194, 1371, 402, 1081, 'A1', 163, 1287, 12),
+  'CUP-L30': cupGrid(1216, 1347, 438, 1105, 'A1', 158, 1267, 13),
+  'CUP-L40': cupGrid(1209, 1354, 411, 1093, 'A1', 162, 1298, 13),
+  'CUP-LR1': cupGrid(998, 1641, 32, 859, 'A1', 199, 1573, 12),
+  'CUP-LR2': cupGrid(1128, 1451, 271, 1006, 'A1', 175.5, 1391, 12)
+};
+const PLAN_ALIAS = { 'CUP-RF': 'CUP-LR1', 'CUP-LRF': 'CUP-LR1', 'FAB-LRF': 'FAB-RF' };
+const MAP_SITE = 'F22P4';
+const FLOOR_ORDER = ['LB4', 'LB3', 'LB2', 'LB1', 'BGSS', 'L10', 'L20', 'L30', 'L40', 'L50', 'RF', 'LRF', 'R1', 'LR1', 'LR2'];
+
+/* ════════ 作業類別配色 ════════ */
+const CAT_COLOR = { '高架作業': '#0284c7', '搬運作業(≥ 100kg)': '#d97706', '安全設施拆除作業': '#dc2626', '吊掛作業': '#9333ea',
+  '五公尺以上施工架組配/拆除作業': '#059669', '天花板作業': '#64748b', '電力作業': '#ca8a04', '局限作業': '#db2777', '開挖或破碎作業': '#92400e' };
+const EXTRA_COLORS = ['#0891b2', '#4f46e5', '#be123c', '#65a30d', '#c2410c'];
+const HR7 = ['搬運作業(≥ 100kg)', '吊掛作業', '五公尺以上施工架組配/拆除作業', '天花板作業', '電力作業', '局限作業', '開挖或破碎作業'];   // 七大高風險 (高架、安全設施拆除除外)
+const hr7Set = () => new Set(HR7.filter(c => S.rows.some(r => r['作業類別'] === c)));
+const catColor = c => CAT_COLOR[c] || (CAT_COLOR[c] = EXTRA_COLORS[Object.keys(CAT_COLOR).length % EXTRA_COLORS.length]);
+const catShort = c => c.replace('五公尺以上施工架組配/拆除作業', '施工架組拆').replace('搬運作業(≥ 100kg)', '搬運≥100kg').replace('安全設施拆除作業', '安全設施拆除').replace(/作業$/, '');
+
+/* ════════ 工具 ════════ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clean = s => String(s ?? '').replace(/[​﻿]/g, '').replace(/\t/g, ' ').trim();
+function parseCSV(text) {
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; }
+    else if (c !== '\r') f += c;
+  }
+  if (f !== '' || row.length) { row.push(f); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim() !== ''));
+}
+
+/* 施工區域 → {bld, fl, a1,a2,b1,b2, raw} */
+const LOC_RE = /^(?:\S+\s)?(.+?)棟(.+?)樓(.+?)柱到(.+?)柱;(.+?)柱到(.+?)柱\.?$/;
+function parseLocs(txt) {
+  return String(txt || '').split(/\r?\n/).map(clean).filter(Boolean).map(raw => {
+    const m = LOC_RE.exec(raw);
+    if (!m) return { raw, bld: '其他', fl: '—' };
+    let bld = clean(m[1]).toUpperCase(), fl = clean(m[2]).toUpperCase();
+    if (bld === 'OFFICE' || bld === 'O') bld = 'OFFICE';
+    return { raw, bld, fl, v: [m[3], m[4], m[5], m[6]].map(x => clean(x).toUpperCase()) };
+  });
+}
+const isNum = s => /^\d+(\.\d+)?\.?$/.test(s);
+// 英文柱位 → 柱線索引 (可含 .5)
+function letterIdx(g, s) {
+  const names = g.letterAxis === 'x' ? g.xs.map(l => l.n) : g.ys.map(l => l.n);
+  const alpha = [...names].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+  const pos = n => names.indexOf(n);
+  if (pos(s) >= 0) return pos(s);
+  const m = /^([A-Z]\d?)\.(\d)$/.exec(s);
+  if (m && pos(m[1]) >= 0) { const a = alpha.indexOf(m[1]), nx = alpha[a + 1]; return nx ? pos(m[1]) + (pos(nx) - pos(m[1])) * (+m[2] / 10) : pos(m[1]); }
+  if (g.letterAxis === 'x' && /^C[A-G]1?$/.test(s) && pos(s.slice(1)) >= 0) return pos(s.slice(1));   // 外構命名 CG、CF → CUP G、F
+  if (g.letterAxis === 'y') { if (s === 'A0') return -0.5; if (/^(Z\d|C[A-G]|GC|GF)/.test(s)) return names.length - 1 + 0.5; }
+  else { if (/^(Z|Y)/.test(s)) return -0.5; }
+  return null;
+}
+function numIdx(g, s) {
+  const lines = g.letterAxis === 'x' ? g.ys : g.xs, v = parseFloat(s);
+  if (isNaN(v)) return null;
+  return Math.max(-0.5, Math.min(lines.length - 0.5, v - 1));
+}
+function idxToF(lines, i) {
+  if (i <= 0) return Math.max(0, lines[0].f + i * (lines[1].f - lines[0].f));
+  const n = lines.length - 1;
+  if (i >= n) return Math.min(1, lines[n].f + (i - n) * (lines[n].f - lines[n - 1].f));
+  const a = Math.floor(i), t = i - a; return lines[a].f + (lines[a + 1].f - lines[a].f) * t;
+}
+// 回傳圖面比例矩形 {x0,x1,y0,y1} 或 null
+function locRect(loc) {
+  if (!loc.v) return null;
+  const key = PLAN_ALIAS[`${loc.bld}-${loc.fl}`] || `${loc.bld}-${loc.fl}`, g = PLANS[key];
+  if (!g) return null;
+  let [a1, a2, b1, b2] = loc.v, L, N;
+  if (!isNum(a1) && !isNum(a2) && isNum(b1) && isNum(b2)) { L = [a1, a2]; N = [b1, b2]; }
+  else if (isNum(a1) && isNum(a2) && !isNum(b1) && !isNum(b2)) { L = [b1, b2]; N = [a1, a2]; }
+  else return null;
+  const li = L.map(s => letterIdx(g, s)), ni = N.map(s => numIdx(g, s));
+  if (li.some(v => v == null) || ni.some(v => v == null)) return null;
+  const lLines = g.letterAxis === 'x' ? g.xs : g.ys, nLines = g.letterAxis === 'x' ? g.ys : g.xs;
+  let l0 = Math.min(...li), l1 = Math.max(...li), n0 = Math.min(...ni), n1 = Math.max(...ni);
+  if (l1 - l0 < .5) { l0 -= .25; l1 += .25; }
+  if (n1 - n0 < .5) { n0 -= .25; n1 += .25; }
+  const lf = [idxToF(lLines, l0), idxToF(lLines, l1)], nf = [idxToF(nLines, n0), idxToF(nLines, n1)];
+  const r = g.letterAxis === 'x' ? { x0: lf[0], x1: lf[1], y0: nf[0], y1: nf[1] } : { x0: nf[0], x1: nf[1], y0: lf[0], y1: lf[1] };
+  r.key = key; r.full = (r.x1 - r.x0) * (r.y1 - r.y0) > .3;
+  return r;
+}
+
+/* ════════ 狀態 ════════ */
+const S = { rows: [], site: '', sub: '', date: '', q: '', cats: new Set(), lv2: false, hideCxl: true, onlyOv: false, hideFull: false,
+  floor: '', zoom: 1, pick: null, hl: null, sort: 'loc', limit: 80 };
+const theme = { get: () => document.documentElement.classList.contains('light') };
+function paintTheme() { $('themeBtn').textContent = theme.get() ? '☀ 淺色' : '☾ 深色'; }
+$('themeBtn').onclick = () => { const L = document.documentElement.classList.toggle('light'); try { localStorage.setItem('wp-theme', L ? 'light' : 'dark'); } catch (e) {} paintTheme(); };
+try { if (localStorage.getItem('wp-theme') === 'dark') document.documentElement.classList.remove('light'); } catch (e) {}
+paintTheme();
+
+/* ════════ 匯入 ════════ */
+const COLS = ['廠別', '作業類別', '主承商', '次承商', '單號', '施工開始日期', '施工結束日期', '施工區域', '狀態', '風險判定', '施工內容', '作業細項', '施工檢查', '施工狀態', '工安', '工安電話', '監工', '監工電話', '施工人數'];
+async function readFile(file) {
+  const buf = await file.arrayBuffer();
+  let text = new TextDecoder('utf-8').decode(buf);
+  if ((text.match(/\uFFFD/g) || []).length > 20) { try { text = new TextDecoder('big5').decode(buf); } catch (e) {} }
+  return text.replace(/^﻿/, '');
+}
+const TTL = 24 * 3600e3;
+const DB = {
+  open() { return new Promise((res, rej) => { const r = indexedDB.open('wp-cache', 1); r.onupgradeneeded = () => r.result.createObjectStore('f'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async op(mode, fn) { const d = await this.open(); return new Promise(res => { const q = fn(d.transaction('f', mode).objectStore('f')); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); },
+  get() { return this.op('readonly', st => st.get('csv')).catch(() => null); },
+  set(v) { return this.op('readwrite', st => st.put(v, 'csv')).catch(() => null); },
+  del() { return this.op('readwrite', st => st.delete('csv')).catch(() => null); }
+};
+const fmt = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+let CACHE_T = 0;
+async function load(file) {
+  $('loadMsg').textContent = '讀取中…';
+  const text = await readFile(file), t = Date.now();
+  if (await loadText(text, file.name, t)) DB.set({ text, name: file.name, t });
+}
+async function loadText(text, name, t) {
+  try {
+    const grid = parseCSV(text);
+    const head = grid[0].map(clean), ix = {};
+    COLS.forEach(c => ix[c] = head.indexOf(c));
+    const need = ['施工開始日期', '施工區域', '作業類別'].filter(c => ix[c] < 0);
+    if (need.length) throw new Error('找不到欄位：' + need.join('、'));
+    const get = (r, c) => ix[c] >= 0 ? (r[ix[c]] ?? '') : '';
+    S.rows = grid.slice(1).map((r, i) => {
+      const o = { i };
+      COLS.forEach(c => o[c] = c === '施工內容' ? String(get(r, c)).trim() : clean(get(r, c)));
+      o.start = o['施工開始日期'].replace(/\//g, '-'); o.end = (o['施工結束日期'] || o.start).replace(/\//g, '-');
+      const pm = /[(（]([^()（）]*)[)）]\s*$/.exec(o['主承商']); o.sub = pm ? clean(pm[1]) : '未標示';
+      o.locs = parseLocs(get(r, '施工區域'));
+      o.locs.forEach(l => l.rect = o['廠別'] === MAP_SITE ? locRect(l) : null);
+      return o;
+    }).filter(o => /^\d{4}-\d{2}-\d{2}$/.test(o.start));
+    if (!S.rows.length) throw new Error('沒有可用的資料列');
+    const sites = [...new Set(S.rows.map(r => r['廠別']))].sort();
+    S.site = sites.includes(MAP_SITE) ? MAP_SITE : sites[0];
+    const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+    const days = singleDays();
+    S.date = days.includes(today) ? today : (days[days.length - 1] || S.rows[0].start);
+    S.floor = ''; S.pick = null; S.hl = null; S.cats = hr7Set();
+    $('site').innerHTML = sites.map(s => {
+      const rs = S.rows.filter(r => r['廠別'] === s), subs = {};
+      rs.forEach(r => subs[r.sub] = (subs[r.sub] || 0) + 1);
+      const keys = Object.keys(subs).sort((a, b) => (a === s ? -1 : b === s ? 1 : 0) || subs[b] - subs[a]);
+      if (keys.length < 2) return `<option value="${esc(s)}|">${esc(s)}（${rs.length}）</option>`;
+      return `<optgroup label="${esc(s)}"><option value="${esc(s)}|">${esc(s)} 全部（${rs.length}）</option>${keys.map(k => `<option value="${esc(s)}|${esc(k)}">${esc(s)} › ${esc(k)}（${subs[k]}）</option>`).join('')}</optgroup>`;
+    }).join('');
+    S.sub = S.rows.some(r => r['廠別'] === S.site && r.sub === S.site) && new Set(S.rows.filter(r => r['廠別'] === S.site).map(r => r.sub)).size > 1 ? S.site : '';
+    $('site').value = `${S.site}|${S.sub}`; $('dateIn').value = S.date;
+    CACHE_T = t;
+    $('sub').textContent = `${name} ・ 共 ${S.rows.length} 筆許可單 ・ ${sites.length} 個廠別 ・ 匯入 ${fmt(t)}，快取保留到 ${fmt(t + TTL)}`;
+    $('dropZone').classList.add('hidden'); $('app').classList.remove('hidden'); $('reBtn').classList.remove('hidden'); $('clrBtn').classList.remove('hidden');
+    render();
+    return true;
+  } catch (e) { $('loadMsg').textContent = '匯入失敗：' + e.message; $('dropZone').classList.remove('hidden'); return false; }
+}
+function resetToEmpty(msg) {
+  S.rows = []; CACHE_T = 0;
+  $('app').classList.add('hidden'); $('dropZone').classList.remove('hidden'); $('reBtn').classList.add('hidden'); $('clrBtn').classList.add('hidden');
+  $('sub').textContent = '匯入施工許可 CSV，依日期查看每天的施工工項與柱位範圍'; $('loadMsg').textContent = msg || '';
+}
+$('clrBtn').onclick = async () => { await DB.del(); resetToEmpty('已清除這台裝置上的匯入資料'); };
+// 開啟時：24 小時內的匯入資料自動載入，逾時刪除
+(async () => {
+  const v = await DB.get();
+  if (v && v.text && Date.now() - v.t < TTL) loadText(v.text, v.name, v.t);
+  else if (v) { await DB.del(); $('loadMsg').textContent = '上次匯入的資料已超過 24 小時，已自動清除，請重新匯入'; }
+})();
+setInterval(async () => { if (CACHE_T && Date.now() - CACHE_T >= TTL) { await DB.del(); resetToEmpty('匯入資料已超過 24 小時，已自動清除，請重新匯入'); } }, 60e3);
+// 桌面 APP：可直接用「開啟方式」開 CSV
+if ('launchQueue' in window) launchQueue.setConsumer(async p => { if (p.files && p.files[0]) load(await p.files[0].getFile()); });
+// 離線快取 (GitHub Pages 等 https 網址)
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) { try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {} }
+function singleDays() {
+  const set = new Set(); S.rows.forEach(r => { if ((!S.site || r['廠別'] === S.site) && r.end === r.start) set.add(r.start); });
+  if (S.date) set.add(S.date);
+  return [...set].sort().slice(-14);
+}
+$('pickBtn').onclick = $('reBtn').onclick = () => $('file').click();
+$('file').onchange = e => { const f = e.target.files[0]; if (f) load(f); e.target.value = ''; };
+const dz = $('dropZone');
+['dragenter', 'dragover'].forEach(t => dz.addEventListener(t, e => { e.preventDefault(); dz.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => dz.addEventListener(t, e => { e.preventDefault(); dz.classList.remove('over'); }));
+dz.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) load(f); });
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) load(f); });
+
+/* ════════ 篩選 ════════ */
+const active = r => r.start <= S.date && r.end >= S.date;
+function baseRows() { return S.rows.filter(r => r['廠別'] === S.site && (!S.sub || r.sub === S.sub) && active(r) && (!S.hideCxl || r['施工狀態'] !== '施工取消')); }
+function filtered() {
+  const q = S.q.trim().toLowerCase();
+  return baseRows().filter(r => (!S.cats.size || S.cats.has(r['作業類別'])) && (!S.lv2 || r['風險判定'] === 'Level2')
+    && (!q || [r['主承商'], r['次承商'], r['單號'], r['施工內容'], r['作業細項'], r['工安'], r['監工'], r['施工區域']].join(' ').toLowerCase().includes(q))
+    && (!S.onlyOv || r.ov));
+}
+// 同日同樓層：吊掛作業範圍與其他工項重疊 (排除整層／大範圍)
+function markOverlaps(rows) {
+  rows.forEach(r => r.ov = 0);
+  const by = {};
+  rows.forEach(r => r.locs.forEach(l => { if (l.rect && !l.rect.full) (by[l.rect.key] = by[l.rect.key] || []).push([r, l.rect]); }));
+  Object.values(by).forEach(list => {
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const [ra, a] = list[i], [rb, b] = list[j];
+      if (ra === rb) continue;
+      if (a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1 && (ra['作業類別'] === '吊掛作業') !== (rb['作業類別'] === '吊掛作業')) { ra.ov++; rb.ov++; }
+    }
+  });
+}
+const bldOrder = b => ({ FAB: 0, CUP: 1, BSGS: 2, OFFICE: 3 }[b] ?? 9);
+const flOrder = f => { const i = FLOOR_ORDER.indexOf(f); return i < 0 ? 99 : i; };
+
+/* ════════ 繪製 ════════ */
+function render() {
+  const base = baseRows();
+  markOverlaps(S.rows.filter(r => r['廠別'] === S.site && active(r) && (!S.hideCxl || r['施工狀態'] !== '施工取消')));   // 重疊跨主承商代碼一起判斷
+  const rows = filtered();
+  // 日期快選
+  $('days').innerHTML = singleDays().map(d => `<button class="chip ${d === S.date ? 'on' : ''}" data-day="${d}">${d.slice(5).replace('-', '/')} ${'日一二三四五六'[new Date(d + 'T00:00:00').getDay()]}</button>`).join('');
+  // 作業類別
+  const cc = {}; base.forEach(r => cc[r['作業類別']] = (cc[r['作業類別']] || 0) + 1);
+  const LAST = ['高架作業', '安全設施拆除作業'], rank = c => LAST.indexOf(c) + 1;   // 這兩類固定排最後
+  $('cats').innerHTML = Object.entries(cc).sort((a, b) => rank(a[0]) - rank(b[0]) || b[1] - a[1]).map(([c, n]) => `<button class="chip cat ${S.cats.has(c) ? 'on' : ''}" data-cat="${esc(c)}" style="${S.cats.has(c) ? `border-color:${catColor(c)}` : ''}"><i style="background:${catColor(c)}"></i>${esc(catShort(c))} <small>${n}</small></button>`).join('');
+  const isHr7 = S.cats.size && S.cats.size === hr7Set().size && [...S.cats].every(c => HR7.includes(c));
+  $('opts').innerHTML = `<button class="chip ${isHr7 ? 'on' : ''}" data-opt="hr7">七大高風險</button><button class="chip ${S.cats.size ? '' : 'on'}" data-opt="allcat">全部工項</button>`
+    + [['lv2', `Level2 高風險`], ['onlyOv', '只看吊掛重疊'], ['hideCxl', '隱藏施工取消']].map(([k, t]) => `<button class="chip ${S[k] ? 'on' : ''}" data-opt="${k}">${t}</button>`).join('')
+    + (!isHr7 || S.lv2 || S.onlyOv || S.q ? `<button class="chip" data-opt="reset">恢復預設</button>` : '');
+  // 統計
+  const ppl = new Set(rows.map(r => r['主承商'])).size;
+  $('stats').innerHTML = [
+    ['', rows.length, `${S.sub || S.site} ${S.cats.size ? (S.cats.size === hr7Set().size && [...S.cats].every(c => HR7.includes(c)) ? '七大高風險' : '所選工項') : '全部工項'}`],
+    ['warn', rows.filter(r => r['風險判定'] === 'Level2').length, 'Level2 高風險'],
+    ['', rows.filter(r => r['作業類別'] === '吊掛作業').length, '吊掛作業'],
+    [rows.some(r => r.ov) ? 'warn' : '', rows.filter(r => r.ov).length, '吊掛與其他工項重疊'],
+  ].map(([c, n, t]) => `<div class="stat ${c}"><b>${n}</b><span>${t}</span></div>`).join('');
+  // 棟 × 樓
+  const cnt = {};
+  rows.forEach(r => new Set(r.locs.map(l => `${l.bld}|${l.fl}`)).forEach(k => cnt[k] = (cnt[k] || 0) + 1));
+  const blds = [...new Set(Object.keys(cnt).map(k => k.split('|')[0]))].sort((a, b) => bldOrder(a) - bldOrder(b) || a.localeCompare(b));
+  if (S.site === MAP_SITE) ['FAB', 'CUP'].forEach(b => { if (!blds.includes(b)) blds.unshift(b); });
+  const keys = Object.keys(cnt);
+  if (!S.floor || !keys.includes(S.floor)) {
+    const mapped = keys.filter(k => PLANS[PLAN_ALIAS[k.replace('|', '-')] || k.replace('|', '-')]).sort((a, b) => cnt[b] - cnt[a]);
+    S.floor = mapped[0] || keys.sort((a, b) => cnt[b] - cnt[a])[0] || '';
+  }
+  $('matrix').innerHTML = blds.sort((a, b) => bldOrder(a) - bldOrder(b)).map(b => {
+    const fls = keys.filter(k => k.startsWith(b + '|')).map(k => k.split('|')[1]);
+    if (S.site === MAP_SITE && (b === 'FAB' || b === 'CUP')) Object.keys(PLANS).filter(k => k.startsWith(b + '-')).map(k => k.split('-')[1]).forEach(f => { if (!fls.includes(f) && !(b === 'CUP' && /^LR/.test(f))) fls.push(f); });
+    fls.sort((x, y) => flOrder(x) - flOrder(y) || x.localeCompare(y));
+    return `<div class="mrow"><span class="bn">${esc(b)}</span><div class="scroll">${fls.map(f => {
+      const k = `${b}|${f}`, n = cnt[k] || 0, mapped = !!PLANS[PLAN_ALIAS[`${b}-${f}`] || `${b}-${f}`];
+      return `<button class="fl ${n ? 'has' : ''} ${k === S.floor ? 'on' : ''} ${mapped ? '' : 'nomap'}" data-fl="${esc(k)}"><b>${esc(f)}</b><span>${n} 件</span></button>`;
+    }).join('')}</div></div>`;
+  }).join('') || '<div class="empty">此日期沒有施工許可</div>';
+  renderPlan(rows); renderList(rows);
+}
+
+function floorRows(rows) {
+  const [b, f] = S.floor.split('|');
+  return rows.filter(r => r.locs.some(l => l.bld === b && l.fl === f));
+}
+function renderPlan(rows) {
+  const card = $('planCard'), [b, f] = S.floor.split('|');
+  if (!S.floor) { card.innerHTML = '<h3>平面圖</h3><div class="empty">請先選擇棟別樓層</div>'; return; }
+  const key = PLAN_ALIAS[`${b}-${f}`] || `${b}-${f}`, g = S.site === MAP_SITE ? PLANS[key] : null;
+  const fr = floorRows(rows);
+  const head = `<h3>${esc(b)} ${esc(f)} <small>${fr.length} 件施工${key !== `${b}-${f}` ? `・使用 ${key.split('-')[1]} 圖面` : ''}</small></h3>`;
+  if (!g) { card.innerHTML = head + `<div class="nomap-box" style="margin-top:10px">此棟別樓層沒有平面圖，請看右側清單</div>`; return; }
+  const zones = [], fullN = { n: 0 };
+  fr.forEach(r => r.locs.forEach(l => { if (l.rect && l.rect.key === key && l.bld === b && l.fl === f) { if (l.rect.full) fullN.n++; zones.push([r, l.rect]); } }));
+  zones.sort((a, z) => (z[1].x1 - z[1].x0) * (z[1].y1 - z[1].y0) - (a[1].x1 - a[1].x0) * (a[1].y1 - a[1].y0));
+  const unl = fr.filter(r => !r.locs.some(l => l.rect && l.rect.key === key && l.bld === b && l.fl === f)).length;
+  const AW = 95.4, AH = 95.4 * g.h / g.w;
+  const gap = ls => ls.slice(1).reduce((m, l, i) => Math.min(m, l.f - ls[i].f), 1);
+  const bub = (ls, span) => { const d = Math.max(1.3, Math.min(3.4, gap(ls) * span * .9)); return l => `width:${l.n.length > 2 ? d * 1.35 : d}cqw;height:${d}cqw;line-height:calc(${d}cqw - 2px);font-size:${d * (l.n.length > 2 ? .42 : .55)}cqw`; };
+  const bx = bub(g.xs, AW), by = bub(g.ys, AH);
+  let axT = '', axL = '', lines = '';
+  g.xs.forEach(l => { axT += `<span class="ax" style="left:${l.f * 100}%;top:50%;${bx(l)}">${l.n}</span>`; lines += `<line class="gl" x1="${l.f * 1000}" y1="0" x2="${l.f * 1000}" y2="1000" vector-effect="non-scaling-stroke"/>`; });
+  g.ys.forEach(l => { axL += `<span class="ax" style="top:${l.f * 100}%;left:50%;${by(l)}">${l.n}</span>`; lines += `<line class="gl" x1="0" y1="${l.f * 1000}" x2="1000" y2="${l.f * 1000}" vector-effect="non-scaling-stroke"/>`; });
+  const hit = S.pick && S.pick.key === key ? new Set(zones.filter(([r, z]) => S.pick.x >= z.x0 && S.pick.x <= z.x1 && S.pick.y >= z.y0 && S.pick.y <= z.y1).map(([r]) => r.i)) : null;
+  const zh = zones.filter(([r, z]) => !(S.hideFull && z.full)).map(([r, z]) => {
+    const c = catColor(r['作業類別']), on = S.hl === r.i || (hit && hit.has(r.i)), dim = (S.hl != null && S.hl !== r.i) || (hit && !hit.has(r.i));
+    return `<div class="zone ${z.full ? 'full' : ''} ${on ? 'hit' : ''} ${dim ? 'dim' : ''}" style="left:${z.x0 * 100}%;top:${z.y0 * 100}%;width:${(z.x1 - z.x0) * 100}%;height:${(z.y1 - z.y0) * 100}%;border-color:${c};background:${c}${r.ov ? '40' : '26'}"></div>`;
+  }).join('');
+  const mark = S.pick && S.pick.key === key ? `<div class="mark" style="left:${S.pick.x * 100}%;top:${S.pick.y * 100}%"></div>` : '';
+  const cats = [...new Set(zones.map(([r]) => r['作業類別']))];
+  card.innerHTML = head + `
+    <div class="ptools">
+      <button class="zb" data-zoom="-1" aria-label="縮小">−</button><span class="mono" style="width:46px;text-align:center;font-size:13px">${Math.round(S.zoom * 100)}%</span><button class="zb" data-zoom="1" aria-label="放大">＋</button>
+      <button class="tog ${S.hideFull ? 'on' : ''}" data-tog="hideFull">隱藏整層範圍${fullN.n ? `（${fullN.n}）` : ''}</button>
+      ${S.pick || S.hl != null ? '<button class="tog" data-tog="clearPick">清除選取</button>' : ''}
+    </div>
+    <div class="plan-scroll"><div class="plan-cq" style="width:${S.zoom * 100}%"><div class="plan-pad">
+      <div class="ax-t">${axT}</div><div class="ax-l">${axL}</div>
+      <div class="area" id="planArea" data-key="${key}" style="aspect-ratio:${g.w}/${g.h}">
+        <img src="plans/${key}.webp" alt="${esc(b)} ${esc(f)} 平面圖" draggable="false">
+        <svg viewBox="0 0 1000 1000" preserveAspectRatio="none"><g stroke-width="1" stroke-dasharray="6 4">${lines}</g></svg>
+        ${zh}${mark}
+      </div></div></div></div>
+    <div class="legend">${cats.map(c => `<span><i style="border-color:${catColor(c)};background:${catColor(c)}33"></i>${esc(catShort(c))}</span>`).join('')}<span><i style="border-style:dashed;border-color:var(--tx3)"></i>整層／大範圍（超過 3 成樓板）</span></div>
+    <div class="pickinfo">${S.pick && S.pick.key === key ? `已選位置 <b class="mono">${esc(S.pick.label)}</b>：此處 <b>${hit.size}</b> 件施工（清單已同步篩選）` : '點平面圖任一位置，可查看該處有哪些施工'}${unl ? `<br><span style="color:var(--tx3)">另有 ${unl} 件位置無法對應柱位（如外圍、管橋），只列在清單。</span>` : ''}</div>`;
+}
+
+function locLabel(l) { return l.v ? `${l.bld} ${l.fl}　${l.v[0]}~${l.v[1]} / ${l.v[2]}~${l.v[3]}` : l.raw; }
+function phone(name, tel) {
+  const ns = String(name || '').split(/\n/).map(clean).filter(Boolean), ts = String(tel || '').split(/\n/).map(clean).filter(Boolean);
+  if (!ns.length) return '—';
+  return ns.map((n, i) => `${esc(n)}${ts[i] ? ` <a href="tel:${esc(ts[i].replace(/[^\d+]/g, ''))}">${esc(ts[i])}</a>` : ''}`).join('、');
+}
+function renderList(rows) {
+  const card = $('listCard'), [b, f] = S.floor.split('|');
+  let list = S.floor ? floorRows(rows) : rows, scope = S.floor ? `${b} ${f}` : '全部';
+  if (S.pick) {
+    list = list.filter(r => r.locs.some(l => l.rect && l.rect.key === S.pick.key && S.pick.x >= l.rect.x0 && S.pick.x <= l.rect.x1 && S.pick.y >= l.rect.y0 && S.pick.y <= l.rect.y1));
+    scope += ` ・ ${S.pick.label}`;
+  }
+  const cmp = { loc: (a, z) => (z.ov - a.ov) || (z['風險判定'] > a['風險判定'] ? 1 : z['風險判定'] < a['風險判定'] ? -1 : 0) || a['作業類別'].localeCompare(z['作業類別']),
+    cat: (a, z) => a['作業類別'].localeCompare(z['作業類別']) || a['主承商'].localeCompare(z['主承商']),
+    con: (a, z) => a['主承商'].localeCompare(z['主承商']) || a['單號'].localeCompare(z['單號']) }[S.sort];
+  list = [...list].sort(cmp);
+  const shown = list.slice(0, S.limit);
+  card.innerHTML = `<div class="lhead"><h3>施工工項 <small>${esc(scope)} ・ ${list.length} 件</small></h3>
+      <div class="row"><button class="tog ${S.floor ? '' : 'on'}" data-tog="allFloors">${S.floor ? '看全部樓層' : '全部樓層中'}</button>
+      <select class="sel sort" id="sortSel" aria-label="排序"><option value="loc" ${S.sort === 'loc' ? 'selected' : ''}>重疊／風險優先</option><option value="cat" ${S.sort === 'cat' ? 'selected' : ''}>依作業類別</option><option value="con" ${S.sort === 'con' ? 'selected' : ''}>依主承商</option></select></div></div>
+    ${shown.map(itemHTML).join('') || '<div class="empty">沒有符合條件的施工工項</div>'}
+    ${list.length > S.limit ? `<button class="btn" style="width:100%;margin-top:10px" data-more="1">再顯示 ${Math.min(80, list.length - S.limit)} 件（共 ${list.length}）</button>` : ''}`;
+}
+function itemHTML(r) {
+  const c = catColor(r['作業類別']), st = r['施工狀態'];
+  const stc = st === '施工完成' ? 't-ok' : st === '施工取消' ? 't-cxl' : 't-wait';
+  const [b, f] = S.floor.split('|');
+  const days = r.start === r.end ? r.start.slice(5).replace('-', '/') : `${r.start.slice(5).replace('-', '/')}～${r.end.slice(5).replace('-', '/')}`;
+  const txt = r['施工內容'] || '';
+  return `<article class="item ${S.hl === r.i ? 'hl' : ''}" style="--c:${c}">
+    <div class="it1"><span class="tag t-cat" style="background:${c}">${esc(catShort(r['作業類別']))}</span>
+      <span class="tag ${r['風險判定'] === 'Level2' ? 't-l2' : 't-l1'}">${esc(r['風險判定'] || '—')}</span>
+      <span class="tag ${stc}">${esc(st || '—')}</span>${r.ov ? `<span class="tag t-ov">吊掛重疊 ${r.ov}</span>` : ''}
+      <span class="no mono">#${esc(r['單號'])} ・ ${days}</span></div>
+    <div class="ittl">${esc(r['主承商'])}${r['次承商'] ? ` ／ ${esc(r['次承商'])}` : ''}${r['作業細項'] ? ` ・ <span style="font-weight:500;color:var(--tx2)">${esc(r['作業細項'])}</span>` : ''}</div>
+    <div class="locs">${r.locs.map(l => `<div class="loc"><span>📍</span>${l.rect ? `<button data-show="${r.i}" data-fl="${esc(l.bld + '|' + l.fl)}">${esc(locLabel(l))}</button>` : `<span class="${l.v ? '' : 'na'}">${esc(locLabel(l))}</span>`}</div>`).join('')}</div>
+    <div class="desc" id="d${r.i}">${esc(txt)}</div>${txt.split('\n').length > 3 || txt.length > 90 ? `<button class="more" data-desc="${r.i}">展開內容</button>` : ''}
+    <div class="ppl"><div><em>工安</em>${phone(r['工安'], r['工安電話'])}</div><div><em>監工</em>${phone(r['監工'], r['監工電話'])}</div></div>
+  </article>`;
+}
+
+/* ════════ 事件 ════════ */
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-day],[data-cat],[data-opt],[data-fl],[data-zoom],[data-tog],[data-more],[data-desc],[data-show],#planArea');
+  if (!t) return;
+  const d = t.dataset;
+  if (d.show != null) { S.floor = d.fl; S.hl = +d.show; S.pick = null; render(); $('planCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+  if (d.day) { S.date = d.day; $('dateIn').value = S.date; S.pick = null; S.hl = null; S.limit = 80; }
+  else if (d.cat) { S.cats.has(d.cat) ? S.cats.delete(d.cat) : S.cats.add(d.cat); S.limit = 80; }
+  else if (d.opt) { if (d.opt === 'reset') { S.cats = hr7Set(); S.lv2 = S.onlyOv = false; S.q = ''; $('q').value = ''; } else if (d.opt === 'hr7') S.cats = hr7Set(); else if (d.opt === 'allcat') S.cats = new Set(); else S[d.opt] = !S[d.opt]; S.limit = 80; }
+  else if (d.fl) { S.floor = d.fl; S.pick = null; S.hl = null; S.zoom = 1; S.limit = 80; }
+  else if (d.zoom) { const st = [1, 1.5, 2, 3, 4]; S.zoom = st[Math.max(0, Math.min(st.length - 1, st.indexOf(S.zoom) + +d.zoom))]; renderPlan(filtered()); return; }
+  else if (d.tog === 'hideFull') S.hideFull = !S.hideFull;
+  else if (d.tog === 'clearPick') { S.pick = null; S.hl = null; }
+  else if (d.tog === 'allFloors') { S.floor = S.floor ? '' : S.floor; S.pick = null; S.hl = null; if (!S.floor) { renderList(filtered()); document.querySelectorAll('.fl.on').forEach(x => x.classList.remove('on')); return; } }
+  else if (d.more) { S.limit += 80; renderList(filtered()); return; }
+  else if (d.desc) { const el = $('d' + d.desc); el.classList.toggle('open'); t.textContent = el.classList.contains('open') ? '收合內容' : '展開內容'; return; }
+  else if (t.id === 'planArea') {
+    const r = t.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height, g = PLANS[t.dataset.key];
+    const near = (ls, v) => { let i = ls.findIndex(l => l.f > v); if (i < 0) return `${ls[ls.length - 1].n}外`; if (i === 0) return `${ls[0].n}外`; const a = ls[i - 1].n, z = ls[i].n; return isNum(a) ? `${a}~${z}` : [a, z].sort().join('~'); };
+    const lx = near(g.xs, x), ly = near(g.ys, y);
+    S.pick = { key: t.dataset.key, x, y, label: g.letterAxis === 'x' ? `${lx} / ${ly}` : `${ly} / ${lx}` }; S.hl = null;
+  }
+  render();
+});
+$('site').onchange = e => { [S.site, S.sub] = e.target.value.split('|'); const days = singleDays(); if (!days.includes(S.date)) { S.date = days[days.length - 1] || S.date; $('dateIn').value = S.date; } S.floor = ''; S.pick = null; S.hl = null; S.cats = hr7Set(); render(); };
+$('dateIn').onchange = e => { if (e.target.value) { S.date = e.target.value; S.pick = null; S.hl = null; render(); } };
+let qt; $('q').oninput = e => { clearTimeout(qt); qt = setTimeout(() => { S.q = e.target.value; S.limit = 80; render(); }, 200); };
+document.addEventListener('change', e => { if (e.target.id === 'sortSel') { S.sort = e.target.value; renderList(filtered()); } });
+}
+</script>
+</body>
+</html>
