@@ -204,7 +204,9 @@ function cupGrid(w, h, xG, xEnd, endName, y1, y12, lastRow) {
   return { w, h, letterAxis: 'x', xs: names.map(n => ({ n, f: (xG + COL_MM[n] * sx) / w })),
     ys: NUMS(lastRow).map((n, i) => ({ n, f: (y1 + (i < 12 ? i * 960 : 10560 + 360) * sy) / h })) };
 }
-const fabGrid = () => ({ w: 1300, h: 1300, letterAxis: 'y', xs: evenLines(NUMS(26), 22, 1279, 1300), ys: evenLines(FAB_L, 26, 1274, 1300) });
+// FAB 柱號方向：false = 左→右 1~26；true = 右→左 1~26 (鏡像)
+let FAB_FLIP = false; try { FAB_FLIP = localStorage.getItem('wp-fabflip') === '1'; } catch (e) {}
+const fabGrid = () => ({ w: 1300, h: 1300, letterAxis: 'y', numRev: FAB_FLIP, xs: evenLines(FAB_FLIP ? NUMS(26).reverse() : NUMS(26), 22, 1279, 1300), ys: evenLines(FAB_L, 26, 1274, 1300) });
 const PLANS = {
   'FAB-LB2': fabGrid(), 'FAB-LB1': fabGrid(), 'FAB-L10': fabGrid(), 'FAB-L20': fabGrid(), 'FAB-L30': fabGrid(), 'FAB-L40': fabGrid(), 'FAB-RF': fabGrid(),
   'CUP-LB1': cupGrid(1137, 1440, 162, 795, 'A', 160, 1278, 13),
@@ -274,7 +276,8 @@ function letterIdx(g, s) {
 function numIdx(g, s) {
   const lines = g.letterAxis === 'x' ? g.ys : g.xs, v = parseFloat(s);
   if (isNaN(v)) return null;
-  return Math.max(-0.5, Math.min(lines.length - 0.5, v - 1));
+  const i = Math.max(-0.5, Math.min(lines.length - 0.5, v - 1));
+  return g.numRev ? (lines.length - 1) - i : i;   // 鏡像時由右往左數
 }
 function idxToF(lines, i) {
   if (i <= 0) return Math.max(0, lines[0].f + i * (lines[1].f - lines[0].f));
@@ -304,6 +307,12 @@ function locRect(loc) {
 }
 
 /* ════════ 狀態 ════════ */
+function setFabFlip(flip) {
+  FAB_FLIP = flip; try { localStorage.setItem('wp-fabflip', flip ? '1' : '0'); } catch (e) {}
+  Object.keys(PLANS).filter(k => k.startsWith('FAB-')).forEach(k => PLANS[k] = fabGrid());
+  S.rows.forEach(o => o.locs.forEach(l => l.rect = o['廠別'] === MAP_SITE ? locRect(l) : null));
+  S.pick = null;
+}
 const S = { rows: [], site: '', sub: '', date: '', q: '', cats: new Set(), lv2: false, hideCxl: true, onlyOv: false, hideFull: false,
   floor: '', zoom: 1, pick: null, hl: null, sort: 'loc', limit: 80 };
 const theme = { get: () => document.documentElement.classList.contains('light') };
@@ -542,6 +551,7 @@ function renderPlan(rows) {
   card.innerHTML = head + `
     <div class="ptools">
       <button class="zb" data-zoom="-1" aria-label="縮小">−</button><span class="mono" style="width:46px;text-align:center;font-size:13px">${Math.round(S.zoom * 100)}%</span><button class="zb" data-zoom="1" aria-label="放大">＋</button>
+      ${key.startsWith('FAB-') ? `<button class="tog on" data-tog="flip" title="FAB 柱號 1~26 的方向，切換後施工範圍會跟著鏡像">柱號 ${FAB_FLIP ? '1 在右（26…1）' : '1 在左（1…26）'} ⇄ 鏡像</button>` : ''}
       <button class="tog ${S.hideFull ? 'on' : ''}" data-tog="hideFull">隱藏整層範圍${fullN.n ? `（${fullN.n}）` : ''}</button>
       ${S.pick || S.hl != null ? '<button class="tog" data-tog="clearPick">清除選取</button>' : ''}
       <button class="tog" data-tog="png" style="margin-left:auto;font-weight:700">匯出 PNG</button>
@@ -704,6 +714,7 @@ document.addEventListener('click', e => {
   else if (d.fl) { S.floor = d.fl; S.pick = null; S.hl = null; S.zoom = 1; S.limit = 80; }
   else if (d.zoom) { const st = [1, 1.5, 2, 3, 4]; S.zoom = st[Math.max(0, Math.min(st.length - 1, st.indexOf(S.zoom) + +d.zoom))]; renderPlan(filtered()); return; }
   else if (d.tog === 'png') { exportPNG(t); return; }
+  else if (d.tog === 'flip') setFabFlip(!FAB_FLIP);
   else if (d.tog === 'hideFull') S.hideFull = !S.hideFull;
   else if (d.tog === 'clearPick') { S.pick = null; S.hl = null; }
   else if (d.tog === 'allFloors') { S.floor = S.floor ? '' : S.floor; S.pick = null; S.hl = null; if (!S.floor) { renderList(filtered()); document.querySelectorAll('.fl.on').forEach(x => x.classList.remove('on')); return; } }
@@ -711,7 +722,7 @@ document.addEventListener('click', e => {
   else if (d.desc) { const el = $('d' + d.desc); el.classList.toggle('open'); t.textContent = el.classList.contains('open') ? '收合內容' : '展開內容'; return; }
   else if (t.id === 'planArea') {
     const r = t.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height, g = PLANS[t.dataset.key];
-    const near = (ls, v) => { let i = ls.findIndex(l => l.f > v); if (i < 0) return `${ls[ls.length - 1].n}外`; if (i === 0) return `${ls[0].n}外`; const a = ls[i - 1].n, z = ls[i].n; return isNum(a) ? `${a}~${z}` : [a, z].sort().join('~'); };
+    const near = (ls, v) => { let i = ls.findIndex(l => l.f > v); if (i < 0) return `${ls[ls.length - 1].n}外`; if (i === 0) return `${ls[0].n}外`; const a = ls[i - 1].n, z = ls[i].n; return isNum(a) ? `${Math.min(+a, +z)}~${Math.max(+a, +z)}` : [a, z].sort().join('~'); };
     const lx = near(g.xs, x), ly = near(g.ys, y);
     S.pick = { key: t.dataset.key, x, y, label: g.letterAxis === 'x' ? `${lx} / ${ly}` : `${ly} / ${lx}` }; S.hl = null;
   }
