@@ -152,18 +152,17 @@ html:not(.light) .t-l2{background:#7f1d1d;color:#fecaca}html:not(.light) .t-ok{b
     <div class="hbtns">
       <button class="btn" id="themeBtn" type="button"></button>
       <button class="btn hidden" id="clrBtn" type="button" title="刪除這台電腦上保存的匯入資料">清除快取</button>
-      <button class="btn gh hidden" id="ghBtn2" type="button" title="自動讀取 GitHub 上最新的一份 CSV">GitHub 資料</button>
-      <button class="btn pri hidden" id="reBtn" type="button">本機 CSV</button>
+      <button class="btn pri hidden" id="reBtn" type="button">匯入 CSV</button>
     </div>
   </header>
   <input type="file" id="file" accept=".csv,text/csv" class="hidden">
 
   <section id="dropZone" class="drop">
     <h2>匯入施工許可 CSV</h2>
-    <p>選擇資料來源：GitHub 上每日更新的資料，或這台裝置裡的 CSV 檔（也可直接拖曳檔案到這裡）</p>
+    <p>選擇這台裝置裡的 CSV 檔，或直接拖曳檔案到這裡</p>
     <p>欄位需含：<code>廠別、作業類別、主承商、次承商、單號、施工開始日期、施工結束日期、施工區域、風險判定、施工內容、施工狀態…</code></p>
     <p>施工區域格式：<code>FAB棟L30樓A柱到Z柱;1柱到14柱.</code>（多個區域可分行）</p>
-    <div class="btns"><button class="btn gh" id="ghBtn" type="button">匯入 GitHub 資料</button><button class="btn pri" id="pickBtn" type="button">匯入本機 CSV</button></div>
+    <div class="btns"><button class="btn pri" id="pickBtn" type="button">選擇 CSV 檔</button></div>
     <p id="loadMsg" style="margin-top:10px"></p>
     <p style="font-size:12.5px;color:var(--tx3)">匯入的資料只存在這台裝置，保留 24 小時後自動清除；期間重新開啟不必再匯入，匯入新檔會直接取代。</p>
   </section>
@@ -379,14 +378,14 @@ async function loadText(text, name, t) {
     $('site').value = `${S.site}|${S.sub}`; $('dateIn').value = S.date;
     CACHE_T = t;
     $('sub').textContent = `${name} ・ 共 ${S.rows.length} 筆許可單 ・ ${sites.length} 個廠別 ・ 匯入 ${fmt(t)}，快取保留到 ${fmt(t + TTL)}`;
-    $('dropZone').classList.add('hidden'); $('app').classList.remove('hidden'); $('reBtn').classList.remove('hidden'); $('ghBtn2').classList.remove('hidden'); $('clrBtn').classList.remove('hidden');
+    $('dropZone').classList.add('hidden'); $('app').classList.remove('hidden'); $('reBtn').classList.remove('hidden'); $('clrBtn').classList.remove('hidden');
     render();
     return true;
   } catch (e) { $('loadMsg').textContent = '匯入失敗：' + e.message; $('dropZone').classList.remove('hidden'); return false; }
 }
 function resetToEmpty(msg) {
   S.rows = []; CACHE_T = 0;
-  $('app').classList.add('hidden'); $('dropZone').classList.remove('hidden'); $('reBtn').classList.add('hidden'); $('ghBtn2').classList.add('hidden'); $('clrBtn').classList.add('hidden');
+  $('app').classList.add('hidden'); $('dropZone').classList.remove('hidden'); $('reBtn').classList.add('hidden'); $('clrBtn').classList.add('hidden');
   $('sub').textContent = '匯入施工許可 CSV，依日期查看每天的施工工項與柱位範圍'; $('loadMsg').textContent = msg || '';
 }
 $('clrBtn').onclick = async () => { await DB.del(); resetToEmpty('已清除這台裝置上的匯入資料'); };
@@ -407,40 +406,7 @@ function singleDays() {
   return [...set].sort().slice(-14);
 }
 $('pickBtn').onclick = $('reBtn').onclick = () => $('file').click();
-/* GitHub：讀取同一個 repository 裡最新的一份 CSV (根目錄或 data/ 資料夾) */
-const GH_DEFAULT = { owner: 'visegt', repo: 'Construction-dashboard' };
-function ghRepo() {
-  const h = location.hostname;
-  if (/\.github\.io$/i.test(h)) return { owner: h.split('.')[0], repo: location.pathname.split('/').filter(Boolean)[0] || h, pages: true };
-  return { ...GH_DEFAULT, pages: false };
-}
-async function loadGitHub() {
-  const gr = ghRepo(), say = m => { $('loadMsg').textContent = m; if (!$('app').classList.contains('hidden')) $('sub').textContent = m; };
-  say('正在讀取 GitHub 上最新的 CSV…');
-  try {
-    let files = [];
-    for (const dir of ['', 'data']) {
-      try {
-        const r = await fetch(`https://api.github.com/repos/${gr.owner}/${gr.repo}/contents/${dir}`, { cache: 'no-store' });
-        if (r.ok) { const j = await r.json(); if (Array.isArray(j)) files.push(...j.filter(x => x.type === 'file' && /\.csv$/i.test(x.name))); }
-      } catch (e) {}
-    }
-    if (!files.length) throw new Error(`在 ${gr.owner}/${gr.repo} 找不到 CSV 檔（請放在根目錄或 data 資料夾）`);
-    files.sort((a, b) => b.name.localeCompare(a.name, 'en', { numeric: true }));
-    const f = files[0];
-    let res = null;
-    if (gr.pages) { try { res = await fetch(f.path.split('/').map(encodeURIComponent).join('/') + '?t=' + Date.now(), { cache: 'no-store' }); } catch (e) {} }
-    if (!res || !res.ok) res = await fetch(f.download_url, { cache: 'no-store' });
-    if (!res.ok) throw new Error('下載失敗（' + res.status + '）');
-    const text = decodeBuf(await res.arrayBuffer()), t = Date.now(), name = `${f.name}（GitHub）`;
-    if (await loadText(text, name, t)) DB.set({ text, name, t });
-  } catch (e) {
-    const blocked = !gr.pages && e instanceof TypeError ? '這個頁面不能連到 GitHub，請在 GitHub Pages 網址或桌面 APP 使用此按鈕。' : '';
-    say('GitHub 匯入失敗：' + (blocked || e.message));
-    if ($('app').classList.contains('hidden')) $('dropZone').classList.remove('hidden');
-  }
-}
-$('ghBtn').onclick = $('ghBtn2').onclick = loadGitHub;
+
 $('file').onchange = e => { const f = e.target.files[0]; if (f) load(f); e.target.value = ''; };
 const dz = $('dropZone');
 ['dragenter', 'dragover'].forEach(t => dz.addEventListener(t, e => { e.preventDefault(); dz.classList.add('over'); }));
